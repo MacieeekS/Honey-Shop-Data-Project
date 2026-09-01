@@ -1,0 +1,94 @@
+--CTE
+
+--Najlepsi klienci
+
+with wydatki_klietnow as(
+select klient_id, sum(calkowita_kwota) as suma_wydatkow from zamowienia
+group by klient_id)
+select k.imie, k.nazwisko, wk.suma_wydatkow from klienci as k
+inner join wydatki_klietnow as wk on k.id = wk.klient_id
+order by suma_wydatkow desc limit 5;
+
+--Slabo sprzedajace sie produkty
+
+with laczna_sprzedaz as(
+select produkt_id, sum(ilosc) as ilosc_sprzedazy from szczegoly_zamowienia
+group by produkt_id),
+ilosc_magazyn as(
+select produkt_id, sum(ilosc_sztuk) as stan_magazynowy from magazyn
+group by produkt_id)
+select p.nazwa, ls.ilosc_sprzedazy, im.stan_magazynowy from produkty as p
+inner join laczna_sprzedaz as ls on p.id = ls.produkt_id 
+inner join ilosc_magazyn as im on p.id = im.produkt_id
+where im.stan_magazynowy > 100 and ls.ilosc_sprzedazy < 20;
+
+--Koszyk z rabatem vs bez rabatu
+with zamowienia_z_rabatem as (
+select avg(calkowita_kwota) as srednia_wartosc_zRabatem from zamowienia
+where kod_rabatowy_id is not null),
+zamowienia_bez_rabatu as (
+select avg(calkowita_kwota) as srednia_wartosc_bezRabatu from zamowienia
+where kod_rabatowy_id is null)
+select zzr.srednia_wartosc_zRabatem, zbr.srednia_wartosc_bezRabatu from zamowienia_z_rabatem as zzr
+cross join zamowienia_bez_rabatu as zbr;
+
+--Podzial klientow na 3 grupy
+with klient_zamowienia as (
+select klient_id, count(id) as ilosc_zamowien from zamowienia group by klient_id)
+select k.imie, k.nazwisko, kz.ilosc_zamowien,
+case
+	when kz.ilosc_zamowien = 1 then 'Nowy'
+	when kz.ilosc_zamowien between 2 and 5 then 'Lojalny'
+	else 'VIP'
+	end as Segment
+from klienci as k
+inner join klient_zamowienia as kz on k.id = kz.klient_id;
+
+--Słaba opinia a dużo pieniędzy
+with zli_klienci as (
+select klient_id, komentarz from opinie where ocena in (1, 2)),
+wydatki_klientow as (
+select klient_id, sum(calkowita_kwota) as kwota from zamowienia
+group by klient_id)
+select k.imie, k.nazwisko, zk.komentarz, wk.kwota from klienci as k
+inner join zli_klienci as zk on k.id = zk.klient_id 
+inner join wydatki_klientow as wk on k.id = wk.klient_id 
+order by kwota desc;
+
+--Czesto dodane do ulubionych ale nie kupione
+with liczba_ulubionych as (
+select produkt_id, count(produkt_id) as ile_razy from ulubione
+group by produkt_id),
+liczba_sprzedanych as (
+select produkt_id, sum(ilosc) as sprzedane_sztuki from szczegoly_zamowienia
+group by produkt_id)
+select p.nazwa, lu.ile_razy, coalesce(ls.sprzedane_sztuki, 0) as liczba_sprzedazy
+from liczba_ulubionych as lu
+left join liczba_sprzedanych as ls on lu.produkt_id = ls.produkt_id
+left join produkty as p on lu.produkt_id = p.id
+where lu.ile_razy > 2;
+
+--Marża od kuriera
+with analiza_kosztow as (
+select z.id, z.calkowita_kwota, d.koszt_wysylki, 
+(d.koszt_wysylki / z.calkowita_kwota ) * 100 as procent_wysylki
+from zamowienia as z inner join dostawy as d on z.id = d.zamowienie_id)
+select ak.id as numer_zamowienia, ak.calkowita_kwota, ak.koszt_wysylki, ak.procent_wysylki 
+from analiza_kosztow as ak
+where ak.procent_wysylki > 20;
+
+--Karta produktu
+with statystyki_ulubione as (
+select produkt_id, count(produkt_id) as ilosc_ulubionych from ulubione
+group by produkt_id),
+statystyki_opinie as 
+(select produkt_id, round(avg(ocena), 2) as srednia_ocen from opinie
+group by produkt_id),
+statystyki_sprzedazy as (
+select produkt_id, sum(ilosc) as liczba_sprzedazy from szczegoly_zamowienia
+group by produkt_id)
+select p.nazwa, so.srednia_ocen, su.ilosc_ulubionych, ss.liczba_sprzedazy from produkty as p
+left join statystyki_ulubione as su on p.id = su.produkt_id 
+left join statystyki_opinie as so on p.id = so.produkt_id 
+left join statystyki_sprzedazy as ss on p.id = ss.produkt_id 
+order by ss.liczba_sprzedazy desc;
