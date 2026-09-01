@@ -21,7 +21,7 @@ Zaprojektowna baza danych nie służy tylko do przechowywania danych. Posiada r�
 
 ![Schemat bazy danych ERD](images/ERD.png)
 
-## 📊 Dashboardy Analityczne (Power BI)
+## Dashboardy Analityczne (Power BI)
 
 ### 1. Klienci
 Podsumowanie wydatków klientów oraz ich aktywności
